@@ -36,10 +36,10 @@ void sendAllJoynSystemExec(const char *cmd)
     DH.write(tx_msg);
 }
 
-void sendServiceData(const char *data)
+void sendServiceData(const byte *data, int len)
 {
     OutputMessage tx_msg(10002);
-    tx_msg.putString(data);
+    tx_msg.putString((const char*)data, len);
     DH.write(tx_msg);
 }
 
@@ -293,7 +293,7 @@ void main_loop()
       if (l != 0)
       {
         processResponse(responseBytes, l);
-        sendServiceData(serialBuffer); // to AllJoyn via DH
+        sendServiceData(responseBytes, l); // to AllJoyn via DH
       }
 
       serialBufferPos = 0;
