@@ -1,13 +1,56 @@
 #include <SoftwareSerial.h>
-void setup();
+#include <DeviceHive.h>
 
-#define DEBUG
+// device registration data
+// intent numbers should be greater than 255!
+// please refer to http://www.devicehive.com/binary/#SystemMessages/RegisterJson for complete syntax of registration info
+const char *REG_DATA = "{"
+    "id:'CB6A8D90-39EC-4FD6-9C2A-E3DAABD14B53',"
+    "key:'ODB-II',"
+    "name:'ODB-II demo',"
+    "deviceClass:{"
+        "name:'CAN_demo',"
+        "version:'1.0'},"
+    "equipment:[],"
+    "commands:[],"
+    "notifications:["
+        "{intent:10002,name:'ODB-II',params:s}"
+    "]"
+"}";
+
+const char *ALLJOYN_CHANNEL = "com.devicehive.samples.alljoyn.serial.arduino";
+
+InputMessage rx_msg; // received message
+
+void sendAllJoynInfoResponse(void)
+{
+    OutputMessage tx_msg(30002);
+    tx_msg.putString(ALLJOYN_CHANNEL);
+    DH.write(tx_msg);
+}
+
+void sendAllJoynSystemExec(const char *cmd)
+{
+    OutputMessage tx_msg(30004);
+    tx_msg.putString(cmd);
+    DH.write(tx_msg);
+}
+
+void sendServiceData(const char *data)
+{
+    OutputMessage tx_msg(10002);
+    tx_msg.putString(data);
+    DH.write(tx_msg);
+}
+
+// #define DEBUG
 // #define TESTS
 
 #ifdef TESTS
 bool done = false;
 #endif
 
+const int LED_PIN = 13;
 const int pollInterval = 100;  // Interval for sending commands in the loop
 char* commands[] =
   {
@@ -83,7 +126,6 @@ int parseResponse(char * response, byte * responseBytes)
               #endif
               return 0;
             }
-
           }
         }
 
@@ -168,8 +210,11 @@ void setup()
 {
   numberOfCommands = sizeof(commands) / 2;
 
+  pinMode(LED_PIN, OUTPUT);
+
   debug->begin(115200);
   obd2->begin(9600);
+  DH.begin(*debug);
 
 #ifndef TESTS
   delay(1500);
@@ -178,6 +223,8 @@ void setup()
   sendOBD2Command("ATE0\r");
 #endif
 
+    //DH.writeRegistrationResponse(REG_DATA);
+    sendAllJoynInfoResponse();
 }
 
 #ifdef TESTS
@@ -244,13 +291,38 @@ void main_loop()
       int l = parseResponse(serialBuffer, responseBytes);
 
       if (l != 0)
+      {
         processResponse(responseBytes, l);
+        sendServiceData(serialBuffer); // to AllJoyn via DH
+      }
 
       serialBufferPos = 0;
     }
-
   }
-}
+
+
+    if (DH.read(rx_msg) == DH_PARSE_OK)
+    {
+        switch (rx_msg.intent)
+        {
+            case INTENT_REGISTRATION_REQUEST:   // registration data needed
+                DH.writeRegistrationResponse(REG_DATA);
+                break;
+
+            case 30001: // alljoyn info request
+                sendAllJoynInfoResponse();
+                break;
+
+            case 30003: // alljoyn session status
+            {
+                int state = rx_msg.getByte();
+                digitalWrite(LED_PIN, state ? HIGH : LOW);
+            } break;
+        }
+
+        rx_msg.reset(); // reset for the next message parsing
+    }
+  }
 
 void loop()
 {
