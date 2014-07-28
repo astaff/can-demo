@@ -9,7 +9,7 @@ bool done = false;
 #endif
 
 const int pollInterval = 100;  // Interval for sending commands in the loop
-char* commands[] = 
+char* commands[] =
   {
     "010C1\r", // RPM
     "010D1\r", // Speed
@@ -18,10 +18,10 @@ char* commands[] =
 
 SoftwareSerial softSerial(2, 3); // RX, TX
 
-// HardwareSerial * obd2 = &Serial;  
+// HardwareSerial * obd2 = &Serial;
 SoftwareSerial * obd2 = &softSerial;
 
-HardwareSerial * debug = &Serial;  
+HardwareSerial * debug = &Serial;
 // SoftwareSerial * debug = &softSerial;
 
 char serialBuffer[255];
@@ -30,17 +30,17 @@ unsigned long serialBufferPos = 0;
 
 unsigned long lastPoll = millis();
 int commandIndex = 0;
-int numberOfCommands = 0; 
-  
+int numberOfCommands = 0;
+
 void sendOBD2Command(char * command)
 {
-  obd2->write(command); 
-  
+  obd2->write(command);
+
   #ifdef DEBUG
   debug->print("Sending command to OBD-II: ");
   debug->println(command);
   #endif
-  
+
   delay(10);
 }
 
@@ -48,21 +48,21 @@ int parseResponse(char * response, byte * responseBytes)
 {
   char buf[3];
   byte bufPos = 0;
-  
+
   unsigned responseBytesPos = 0;
-  
+
   #ifdef DEBUG
   debug->print("Response: ");
   debug->println(response);
   #endif
-  
+
   int i = 0;
-  
+
   while(response[i] != 0)
   {
     if (response[i] != ' ')
     {
-      buf[bufPos++] = response[i]; 
+      buf[bufPos++] = response[i];
       buf[bufPos] = 0;
     }
 
@@ -71,7 +71,7 @@ int parseResponse(char * response, byte * responseBytes)
       if (bufPos != 0)
       {
         byte b = strtol(buf, 0, 16);
-        
+
         if (b == 0)
         {
           for (int j = 0; j < bufPos; j++)
@@ -83,28 +83,28 @@ int parseResponse(char * response, byte * responseBytes)
               #endif
               return 0;
             }
-          
-          }  
-        }
-        
-        responseBytes[responseBytesPos++] = b;
-        bufPos = 0; 
 
-      }       
+          }
+        }
+
+        responseBytes[responseBytesPos++] = b;
+        bufPos = 0;
+
+      }
     }
-    
+
     i++;
   }
-  
+
   #ifdef DEBUG
   debug->print("Parsed response: ");
-  
+
   for (int i = 0; i < responseBytesPos; i++)
   {
     debug->print(String(responseBytes[i], HEX));
-    debug->print(" ");  
+    debug->print(" ");
   }
-  
+
   debug->println();
   #endif
 
@@ -119,7 +119,7 @@ unsigned long getLongFromArray(byte * b, int offset, int len)
     l <<= 8;
     l |= b[i];
   }
-  
+
   return l;
 }
 
@@ -133,7 +133,7 @@ void processResponse(byte * buf, int len)
     #endif
     return;
   }
-  
+
   if (buf[0] != 0x41)
   {
     #ifdef DEBUG
@@ -152,11 +152,11 @@ void processResponse(byte * buf, int len)
     case 0x0D:
       debug->print("Speed (km/h): ");
       debug->println(res);
-      break;      
+      break;
     case 0x05:
       debug->print("Coolant Temp (C): ");
       debug->println(res - 40);
-      break;      
+      break;
     default:
       debug->print("Unknown command response ID: ");
       debug->println(String(buf[1], HEX));
@@ -164,7 +164,7 @@ void processResponse(byte * buf, int len)
   }
 }
 
-void setup()  
+void setup()
 {
   numberOfCommands = sizeof(commands) / 2;
 
@@ -183,23 +183,23 @@ void setup()
 #ifdef TESTS
 void tests()
 {
-  char * tests[] = { 
-    "00 01 01", 
-    "00 01 1", 
-    "00 01 FF", 
-    "00 01 FFAA", 
-    "0001FFAA", 
-    "0001FFAA   >", 
+  char * tests[] = {
+    "00 01 01",
+    "00 01 1",
+    "00 01 FF",
+    "00 01 FFAA",
+    "0001FFAA",
+    "0001FFAA   >",
     "00 1 01",
     "00 1 01 0"
-  };  
-  
+  };
+
   byte responseBytes[255];
   for (int i = 0; i < sizeof(tests) / 2; i++)
   {
     parseResponse(tests[i], responseBytes);
   }
-  
+
   char * tests2[] = {
     "41 0C 0E 96",
     "41 0D 0E 96",
@@ -213,7 +213,7 @@ void tests()
     int l = parseResponse(tests2[i], responseBytes);
     processResponse(responseBytes, l);
   }
-  
+
 }
 #endif
 
@@ -222,44 +222,44 @@ void main_loop()
   if ((millis() - lastPoll) > pollInterval)
   {
     lastPoll = millis();
-    
+
     sendOBD2Command(commands[commandIndex++]);
 
     if (commandIndex == numberOfCommands)
       commandIndex = 0;
   }
-  
+
   if (obd2->available())
   {
     char c = obd2->read();
-    
+
     if ( (c != '\r') && (c != '>') )
       serialBuffer[serialBufferPos++] = c;
-    
+
     if ( (c == '\r') || (serialBufferPos == sizeof(serialBuffer) - 1) )
     {
       byte responseBytes[255];
-      
+
       serialBuffer[serialBufferPos] = 0;
       int l = parseResponse(serialBuffer, responseBytes);
-      
+
       if (l != 0)
         processResponse(responseBytes, l);
-      
+
       serialBufferPos = 0;
     }
-    
+
   }
 }
 
-void loop() 
+void loop()
 {
 #ifndef TESTS
   main_loop();  // RELEASE
 #else
   if (!done)
   {
-    tests();    // FOR TESTING    
+    tests();    // FOR TESTING
     done = true;
   }
 #endif
